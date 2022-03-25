@@ -1,0 +1,78 @@
+#!/usr/bin/bash
+
+HELP="Usage: packcharm [-v]\n\
+\n\
+  -v,--verbose\tVerbose output\n\
+  -h,--help\tPrint help
+"
+
+while [ "$#" -gt 0 ]; do
+	case $1 in
+		"-h");&
+		"--help")
+			echo -e ${HELP}
+			exit 1
+			;;
+		"-v");&
+		"--verbose")
+			verbose="True"
+			;;
+		"--clean")
+			clean="True"
+			;;
+		*);;
+	esac
+	shift
+done
+
+if [ -z ${verbose} ]; then
+	exec &>/dev/null
+else
+	set -x
+fi
+
+cache="${HOME}/.packcharm/$(basename $(pwd))"
+if [ ! -z ${clean} ]; then
+	rm -rf ${cache}
+fi
+
+mkdir -p ${cache}
+if [ ! -d "${cache}/venv" ]; then
+	virtualenv "${cache}/venv"
+fi
+source "${cache}/venv/bin/activate"
+
+dirname="packcharm-$(date +%s)"
+mkdir ${dirname}
+cp -r ./* ${dirname}/
+cat << EOF > ${dirname}/manifest.yaml
+analysis:
+  attributes:
+  - name: language
+    result: python
+  - name: framework
+    result: operator
+bases:
+- architectures:
+  - amd64
+  channel: '20.04'
+  name: ubuntu
+charmcraft-started-at: '2022-03-23T23:38:04.944491Z'
+charmcraft-version: 1.5.0
+EOF
+cat << 'EOF' > ${dirname}/dispatch
+#!/bin/sh
+
+# Customized version of the dispatch script that adds "." to PYTHONPATH
+# so that the charm libraries in /src/main/charm_libs can also be loaded
+JUJU_DISPATCH_PATH="${JUJU_DISPATCH_PATH:-$0}" PYTHONPATH=lib:venv:. ./src/charm.py
+EOF
+chmod +x ${dirname}/dispatch
+pip install -r ${dirname}/requirements.txt
+mkdir ${dirname}/venv/
+cp -r ${cache}/venv/lib/python3.8/site-packages/* ${dirname}/venv/
+cd ${dirname}
+zip -1 -r my.charm ./*
+mv my.charm ../
+cd ..
+rm -rf ${dirname}
