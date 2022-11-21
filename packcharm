@@ -1,52 +1,13 @@
-#!/usr/bin/bash
+#!/usr/bin/env python3
 
-HELP="Usage: packcharm [-v]\n\
-\n\
-  -v,--verbose\tVerbose output\n\
-  -h,--help\tPrint help
-"
+import argparse
+import pathlib
+import shutil
+import subprocess
+import sys
+import time
 
-while [ "$#" -gt 0 ]; do
-	case $1 in
-		"-h");&
-		"--help")
-			echo -e ${HELP}
-			exit 1
-			;;
-		"-v");&
-		"--verbose")
-			verbose="True"
-			;;
-		"--clean")
-			clean="True"
-			;;
-		*);;
-	esac
-	shift
-done
-
-if [ -z ${verbose} ]; then
-	exec &>/dev/null
-else
-	set -x
-fi
-
-cache="${HOME}/.packcharm/$(basename $(pwd))"
-if [ ! -z ${clean} ]; then
-	rm -rf ${cache}
-fi
-
-mkdir -p ${cache}
-if [ ! -d "${cache}/venv" ]; then
-	virtualenv "${cache}/venv"
-fi
-source "${cache}/venv/bin/activate"
-
-dirname="packcharm-$(date +%s)"
-mkdir ${dirname}
-cp -r ./* ${dirname}/
-cat << EOF > ${dirname}/manifest.yaml
-analysis:
+MANIFEST_YAML = """analysis:
   attributes:
   - name: language
     result: python
@@ -59,20 +20,60 @@ bases:
   name: ubuntu
 charmcraft-started-at: '2022-03-23T23:38:04.944491Z'
 charmcraft-version: 1.5.0
-EOF
-cat << 'EOF' > ${dirname}/dispatch
-#!/bin/sh
+"""
+
+DISPATCH="""#!/bin/sh
 
 # Customized version of the dispatch script that adds "." to PYTHONPATH
 # so that the charm libraries in /src/main/charm_libs can also be loaded
 JUJU_DISPATCH_PATH="${JUJU_DISPATCH_PATH:-$0}" PYTHONPATH=lib:venv:. ./src/charm.py
-EOF
-chmod +x ${dirname}/dispatch
-pip install -r ${dirname}/requirements.txt
-mkdir ${dirname}/venv/
-cp -r ${cache}/venv/lib/python3.8/site-packages/* ${dirname}/venv/
-cd ${dirname}
-zip -1 -r my.charm ./*
-mv my.charm ../
-cd ..
-rm -rf ${dirname}
+"""
+
+
+def run(cmd, shell=False, fail_ok=False):
+    if not shell:
+        cmd = cmd.split()
+    if fail_ok:
+        subprocess.call(cmd, shell=shell)
+    else:
+        subprocess.check_call(cmd, shell=shell)
+
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--clean', action='store_true', help='Rebuild the cache directory')
+    parser.add_argument('-o', '--output', default='./my.charm',
+        type=pathlib.Path, help='Path of charm file to create')
+    return parser.parse_args()
+
+
+def main():
+    args = get_args()
+    if not pathlib.Path('./metadata.yaml').is_file():
+        sys.stderr.write('Please run from inside a charm directory\n')
+        sys.stderr.flush()
+        sys.exit(1)
+    home = pathlib.Path.home()
+    wd = pathlib.Path.cwd()
+    cache = home / f'.packcharm/{wd.name}'
+    if args.clean:
+        shutil.rmtree(cache)
+    cache.mkdir(parents=True, exist_ok=True)
+    if not (cache / 'venv').exists():
+        run(f'virtualenv {cache / "venv"}')
+    tempdir = pathlib.Path(f'./packcharm-{time.time()}')
+    tempdir.mkdir()
+    run(f'cp -r ./* {tempdir}/', shell=True, fail_ok=True)
+    with (tempdir / 'manifest.yaml').open('w') as f:
+        f.write(MANIFEST_YAML)
+    with (tempdir / 'dispatch').open('w') as f:
+        f.write(DISPATCH)
+    run(f'chmod +x {tempdir}/dispatch')
+    run(f'. {cache / "venv/bin/activate"}; pip install -r {tempdir}/requirements.txt', shell=True)
+    (tempdir / 'venv').mkdir()
+    run(f'cp -r {cache}/venv/lib/python3.*/site-packages/* {tempdir}/venv/', shell=True)
+    run(f'cd {tempdir};zip -1 -r {args.output.resolve()} ./*;cd {wd}', shell=True)
+    shutil.rmtree(tempdir)
+
+if __name__ == '__main__':
+    main()
