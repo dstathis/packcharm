@@ -81,7 +81,7 @@ def main():
     # parts
     with (wd / 'charmcraft.yaml').open() as f:
         charmcraft = yaml.safe_load(f)
-    for part_key in charmcraft['parts']:
+    for part_key in charmcraft.get('parts', []):
         part = charmcraft['parts'][part_key]
         for pkg in part['build-packages']:
             check_installed(pkg)
