@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import time
+import yaml
 
 MANIFEST_YAML = """analysis:
   attributes:
@@ -46,6 +47,12 @@ def get_args():
         type=pathlib.Path, help='Path of charm file to create')
     return parser.parse_args()
 
+def check_installed(pkg):
+    p = subprocess.run(['dpkg', '-s', pkg])
+    if p.returncode == 0:
+        return True
+    return False
+
 
 def main():
     args = get_args()
@@ -63,16 +70,35 @@ def main():
         run(f'virtualenv {cache / "venv"}')
     tempdir = pathlib.Path(f'./packcharm-{time.time()}')
     tempdir.mkdir()
+
+    # parts
+    with (wd / 'charmcraft.yaml').open() as f:
+        charmcraft = yaml.safe_load(f)
+    for part_key in charmcraft['parts']:
+        part = charmcraft['parts'][part_key]
+        for pkg in part['build-packages']:
+            check_installed(pkg)
+        if part.get('plugin') == 'dump':
+            run(part['override-pull'], shell=True)
+            run(f'cp -r {part["source"]}/* {tempdir}/', fail_ok=True)
+
+    # copy charm in to tempdir
     run(f'cp -r ./* {tempdir}/', shell=True, fail_ok=True)
+
+    # create special files
     with (tempdir / 'manifest.yaml').open('w') as f:
         f.write(MANIFEST_YAML)
     with (tempdir / 'dispatch').open('w') as f:
         f.write(DISPATCH)
     run(f'chmod +x {tempdir}/dispatch')
+
+    # install python deps
     run(f'. {cache / "venv/bin/activate"}; pip install -r {tempdir}/requirements.txt', shell=True)
     (tempdir / 'venv').mkdir()
     run(f'cp -r {cache}/venv/lib/python3.*/site-packages/* {tempdir}/venv/', shell=True)
-    run(f'cd {tempdir};zip -1 -r {args.output.resolve()} ./*;cd {wd}', shell=True)
+
+    # zip charm
+    run(f'cd {tempdir};zip -1 -r -q {args.output.resolve()} ./*;cd {wd}', shell=True)
     shutil.rmtree(tempdir)
 
 if __name__ == '__main__':
