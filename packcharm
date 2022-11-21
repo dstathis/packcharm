@@ -23,28 +23,35 @@ charmcraft-started-at: '2022-03-23T23:38:04.944491Z'
 charmcraft-version: 1.5.0
 """
 
-DISPATCH="""#!/bin/sh
+DISPATCH = """#!/bin/sh
 
 # Customized version of the dispatch script that adds "." to PYTHONPATH
 # so that the charm libraries in /src/main/charm_libs can also be loaded
 JUJU_DISPATCH_PATH="${JUJU_DISPATCH_PATH:-$0}" PYTHONPATH=lib:venv:. ./src/charm.py
 """
 
+COPY_IGNORES = ['.git', '*.charm', 'packcharm-*']
+if pathlib.Path('.gitignore').is_file():
+    with pathlib.Path('.gitignore').open() as f:
+        extras = f.read().splitlines()
+    COPY_IGNORES += extras
+    print(COPY_IGNORES)
 
-def run(cmd, shell=False, fail_ok=False):
+
+def run(cmd, shell=False, fail_ok=False, env=None):
     if not shell:
         cmd = cmd.split()
     if fail_ok:
-        subprocess.call(cmd, shell=shell)
+        subprocess.call(cmd, shell=shell, env=env)
     else:
-        subprocess.check_call(cmd, shell=shell)
+        subprocess.check_call(cmd, shell=shell, env=env)
 
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--clean', action='store_true', help='Rebuild the cache directory')
-    parser.add_argument('-o', '--output', default='./my.charm',
-        type=pathlib.Path, help='Path of charm file to create')
+    parser.add_argument('-o', '--output', default='./my.charm',type=pathlib.Path, help='Path of charm file to create')
+    parser.add_argument('--keep-temp-dir', action='store_true', help='Keep temporary build directory')
     return parser.parse_args()
 
 def check_installed(pkg):
@@ -79,11 +86,11 @@ def main():
         for pkg in part['build-packages']:
             check_installed(pkg)
         if part.get('plugin') == 'dump':
-            run(part['override-pull'], shell=True)
-            run(f'cp -r {part["source"]}/* {tempdir}/', fail_ok=True)
+            run(part['override-pull'], shell=True, env={'CRAFT_TARGET_ARCH': 'amd64'})
+            shutil.copytree(part['source'], tempdir, dirs_exist_ok=True, ignore=shutil.ignore_patterns(*COPY_IGNORES))
 
     # copy charm in to tempdir
-    run(f'cp -r ./* {tempdir}/', shell=True, fail_ok=True)
+    shutil.copytree('.', tempdir, dirs_exist_ok=True, ignore=shutil.ignore_patterns(*COPY_IGNORES))
 
     # create special files
     with (tempdir / 'manifest.yaml').open('w') as f:
@@ -99,7 +106,8 @@ def main():
 
     # zip charm
     run(f'cd {tempdir};zip -1 -r -q {args.output.resolve()} ./*;cd {wd}', shell=True)
-    shutil.rmtree(tempdir)
+    if not args.keep_temp_dir:
+        shutil.rmtree(tempdir)
 
 if __name__ == '__main__':
     main()
