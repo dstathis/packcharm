@@ -114,5 +114,7 @@ def main():
     if not args.keep_temp_dir:
         shutil.rmtree(tempdir)
 
+    print('Done!')
+
 if __name__ == '__main__':
     main()
