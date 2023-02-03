@@ -35,7 +35,6 @@ if pathlib.Path('.gitignore').is_file():
     with pathlib.Path('.gitignore').open() as f:
         extras = f.read().splitlines()
     COPY_IGNORES += extras
-    print(COPY_IGNORES)
 
 
 def run(cmd, shell=False, fail_ok=False, env=None):
@@ -65,6 +64,12 @@ def main():
     args = get_args()
     if not pathlib.Path('./metadata.yaml').is_file():
         sys.stderr.write('Please run from inside a charm directory\n')
+        sys.stderr.flush()
+        sys.exit(1)
+    try:
+        subprocess.check_call(['which', 'zip'])
+    except subprocess.CalledProcessError:
+        sys.stderr.write('Please install zip\n')
         sys.stderr.flush()
         sys.exit(1)
     home = pathlib.Path.home()
