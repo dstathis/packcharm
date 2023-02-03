@@ -75,7 +75,7 @@ def main():
     home = pathlib.Path.home()
     wd = pathlib.Path.cwd()
     cache = home / f'.packcharm/{wd.name}'
-    if args.clean:
+    if args.clean and cache.exists():
         shutil.rmtree(cache)
     cache.mkdir(parents=True, exist_ok=True)
     if not (cache / 'venv').exists():
