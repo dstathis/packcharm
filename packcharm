@@ -30,14 +30,20 @@ DISPATCH = """#!/bin/sh
 JUJU_DISPATCH_PATH="${JUJU_DISPATCH_PATH:-$0}" PYTHONPATH=lib:venv:. ./src/charm.py
 """
 
-COPY_IGNORES = ['.git', '*.charm', 'packcharm-*']
+COPY_IGNORES = ['.git', '*.charm', 'packcharm-*', 'venv']
 if pathlib.Path('.gitignore').is_file():
     with pathlib.Path('.gitignore').open() as f:
         extras = f.read().splitlines()
     COPY_IGNORES += extras
+    while 'metadata.yaml' in COPY_IGNORES:
+        COPY_IGNORES.remove('metadata.yaml')
+
+VERBOSE = None
 
 
 def run(cmd, shell=False, fail_ok=False, env=None):
+    if VERBOSE:
+        print(f'+ {cmd}')
     if not shell:
         cmd = cmd.split()
     if fail_ok:
@@ -51,6 +57,7 @@ def get_args():
     parser.add_argument('--clean', action='store_true', help='Rebuild the cache directory')
     parser.add_argument('-o', '--output', default='./my.charm',type=pathlib.Path, help='Path of charm file to create')
     parser.add_argument('--keep-temp-dir', action='store_true', help='Keep temporary build directory')
+    parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Verbose output')
     return parser.parse_args()
 
 def check_installed(pkg):
@@ -62,6 +69,8 @@ def check_installed(pkg):
 
 def main():
     args = get_args()
+    global VERBOSE
+    VERBOSE = args.verbose
     if not pathlib.Path('./metadata.yaml').is_file():
         sys.stderr.write('Please run from inside a charm directory\n')
         sys.stderr.flush()
