@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import time
+import typing
 import yaml
 
 MANIFEST_YAML = """analysis:
@@ -81,10 +82,25 @@ def get_pydeps(libdir):
     return pydeps
 
 
-def main():
-    args = get_args()
+def pack(
+    charm_root: typing.Union[str, pathlib.Path],
+    clean: bool = False,
+    output_file: typing.Union[str, pathlib.Path] = './my.charm',
+    keep: bool = False,
+    verbose: bool = False,
+):
+    '''Pack a charm.
+
+    Args:
+        charm_root: Root of the charm directory.
+        clean: Delete the cached python packages before packing.
+        output_file: Name of the charm file to output.
+        keep: Keep the temporary charm directory.
+        verbose: Verbose output.
+    '''
+    output_file = pathlib.Path(output_file)
     global VERBOSE
-    VERBOSE = args.verbose
+    VERBOSE = verbose
     if not pathlib.Path('./metadata.yaml').is_file():
         sys.stderr.write('Please run from inside a charm directory\n')
         sys.stderr.flush()
@@ -98,7 +114,7 @@ def main():
     home = pathlib.Path.home()
     wd = pathlib.Path.cwd()
     cache = home / f'.packcharm/{wd.name}'
-    if args.clean and cache.exists():
+    if clean and cache.exists():
         shutil.rmtree(cache)
     cache.mkdir(parents=True, exist_ok=True)
     if not (cache / 'venv').exists():
@@ -135,12 +151,13 @@ def main():
     run(f'cp -r {cache}/venv/lib/python3.*/site-packages/* {tempdir}/venv/', shell=True)
 
     # zip charm
-    run(f'cd {tempdir};zip -1 -r -q {args.output.resolve()} ./*;cd {wd}', shell=True)
-    if not args.keep_temp_dir:
+    run(f'cd {tempdir};zip -1 -r -q {output_file.resolve()} ./*;cd {wd}', shell=True)
+    if not keep:
         shutil.rmtree(tempdir)
 
     print('Done!')
 
 
-if __name__ == '__main__':
-    main()
+def main():
+    args = get_args()
+    pack(charm_root='.', clean=args.clean, output_file=args.output, keep=args.keep_temp_dir, verbose=args.verbose)
