@@ -156,6 +156,7 @@ def pack(
         shutil.rmtree(tempdir)
 
     print('Done!')
+    return output_file
 
 
 def main():
