@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import ast
 import pathlib
 import shutil
 import subprocess
@@ -55,16 +56,29 @@ def run(cmd, shell=False, fail_ok=False, env=None):
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--clean', action='store_true', help='Rebuild the cache directory')
-    parser.add_argument('-o', '--output', default='./my.charm',type=pathlib.Path, help='Path of charm file to create')
+    parser.add_argument('-o', '--output', default='./my.charm', type=pathlib.Path, help='Path of charm file to create')
     parser.add_argument('--keep-temp-dir', action='store_true', help='Keep temporary build directory')
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Verbose output')
     return parser.parse_args()
+
 
 def check_installed(pkg):
     p = subprocess.run(['dpkg', '-s', pkg])
     if p.returncode == 0:
         return True
     return False
+
+
+def get_pydeps(libdir):
+    for pyfile in libdir.glob('**/*.py'):
+        with pyfile.open() as f:
+            tree = ast.parse(f.read())
+        for node in tree.body:
+            if type(node) == ast.Assign and node.targets[0].id == 'PYDEPS':
+                pydeps = ast.literal_eval(node.value)
+    pydeps = '" "'.join(pydeps)
+    pydeps = f'"{pydeps}"'
+    return pydeps
 
 
 def main():
@@ -115,6 +129,8 @@ def main():
 
     # install python deps
     run(f'. {cache / "venv/bin/activate"}; pip install -r {tempdir}/requirements.txt', shell=True)
+    pydeps = get_pydeps(wd / 'lib')
+    run(f'. {cache / "venv/bin/activate"}; pip install {pydeps}', shell=True)
     (tempdir / 'venv').mkdir()
     run(f'cp -r {cache}/venv/lib/python3.*/site-packages/* {tempdir}/venv/', shell=True)
 
@@ -124,6 +140,7 @@ def main():
         shutil.rmtree(tempdir)
 
     print('Done!')
+
 
 if __name__ == '__main__':
     main()
