@@ -71,12 +71,15 @@ def check_installed(pkg):
 
 
 def get_pydeps(libdir):
+    pydeps = []
     for pyfile in libdir.glob('**/*.py'):
         with pyfile.open() as f:
             tree = ast.parse(f.read())
         for node in tree.body:
             if type(node) == ast.Assign and node.targets[0].id == 'PYDEPS':
-                pydeps = ast.literal_eval(node.value)
+                pydeps += ast.literal_eval(node.value)
+    if not pydeps:
+        return ''
     pydeps = '" "'.join(pydeps)
     pydeps = f'"{pydeps}"'
     return pydeps
@@ -146,7 +149,8 @@ def pack(
     # install python deps
     run(f'. {cache / "venv/bin/activate"}; pip install -r {tempdir}/requirements.txt', shell=True)
     pydeps = get_pydeps(wd / 'lib')
-    run(f'. {cache / "venv/bin/activate"}; pip install {pydeps}', shell=True)
+    if pydeps:
+        run(f'. {cache / "venv/bin/activate"}; pip install {pydeps}', shell=True)
     (tempdir / 'venv').mkdir()
     run(f'cp -r {cache}/venv/lib/python3.*/site-packages/* {tempdir}/venv/', shell=True)
 
