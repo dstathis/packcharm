@@ -24,4 +24,4 @@ Homepage = "https://github.com/dstathis/packcharm"
 "Bug Tracker" = "https://github.com/dstathis/packcharm/issues"
 
 [project.scripts]
-cos-alerter = "packcharm.packcharm:main"
+packcharm = "packcharm.packcharm:main"
