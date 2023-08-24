@@ -146,11 +146,13 @@ def pack(
         f.write(DISPATCH)
     run(f'chmod +x {tempdir}/dispatch')
 
+    pip_install_cmd = "pip install --upgrade --upgrade-strategy eager"
+
     # install python deps
-    run(f'. {cache / "venv/bin/activate"}; pip install -r {tempdir}/requirements.txt', shell=True)
+    run(f'. {cache / "venv/bin/activate"}; {pip_install_cmd} -r {tempdir}/requirements.txt', shell=True)
     pydeps = get_pydeps(wd / 'lib')
     if pydeps:
-        run(f'. {cache / "venv/bin/activate"}; pip install {pydeps}', shell=True)
+        run(f'. {cache / "venv/bin/activate"}; {pip_install_cmd} {pydeps}', shell=True)
     (tempdir / 'venv').mkdir()
     run(f'cp -r {cache}/venv/lib/python3.*/site-packages/* {tempdir}/venv/', shell=True)
 
