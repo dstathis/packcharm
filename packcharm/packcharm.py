@@ -149,6 +149,7 @@ def pack(
     pip_install_cmd = "pip install --upgrade --upgrade-strategy eager"
 
     # install python deps
+    run(f'. {cache / "venv/bin/activate"}; pip install --upgrade pip', shell=True)
     run(f'. {cache / "venv/bin/activate"}; {pip_install_cmd} -r {tempdir}/requirements.txt', shell=True)
     pydeps = get_pydeps(wd / 'lib')
     if pydeps:
